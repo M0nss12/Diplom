@@ -1,12 +1,19 @@
 <template>
   <div id="app">
-    <NavigationBar />
+    <!-- Показываем хедер только если мы НЕ в панели каталога -->
+    <NavigationBar v-if="!isCatalogMode" />
     
-    <main class="main-content">
-      <router-view />
+    <main :class="{ 'main-content': !isCatalogMode }">
+      <!-- АНИМАЦИЯ ПЕРЕХОДА МЕЖДУ СТРАНИЦАМИ -->
+      <router-view v-slot="{ Component }">
+        <transition name="fade" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
     </main>
 
-    <footer class="footer">
+    <!-- Показываем футер только если мы НЕ в панели каталога -->
+    <footer v-if="!isCatalogMode" class="footer">
       <div class="container">
         <div class="footer-content">
           <div class="footer-section">
@@ -54,7 +61,8 @@
 
 <script>
 import NavigationBar from './components/NavigationBar.vue'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 
 export default {
   name: 'App',
@@ -63,6 +71,11 @@ export default {
   },
   setup() {
     const storeName = ref('AutoParts Pro')
+    const route = useRoute()
+
+    const isCatalogMode = computed(() => {
+      return route.path.startsWith('/catalog')
+    })
 
     onMounted(async () => {
       try {
@@ -77,7 +90,8 @@ export default {
     })
 
     return {
-      storeName
+      storeName,
+      isCatalogMode
     }
   }
 }

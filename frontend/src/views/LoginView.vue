@@ -25,14 +25,14 @@
 
 <script>
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useCart } from '@/composables/useCart'; // Импорт
 
 export default {
   setup() {
     const email = ref('');
     const password = ref('');
     const error = ref('');
-    const router = useRouter();
+    const { refreshCart } = useCart(); // Хук
 
     const handleLogin = async () => {
       try {
@@ -46,11 +46,12 @@ export default {
         
         if (!res.ok) throw new Error(data.error);
         
-        // Сохраняем токен и данные
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         
-        // Редирект на главную (перезагрузка чтобы обновить меню)
+        // ОБНОВЛЯЕМ КОРЗИНУ ПОД ЮЗЕРА
+        refreshCart();
+        
         window.location.href = '/'; 
       } catch (e) {
         error.value = e.message;

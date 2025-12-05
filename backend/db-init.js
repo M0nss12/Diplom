@@ -15,6 +15,7 @@ const ADMIN_DATA = {
 };
 
 const createTablesQuery = `
+  DROP TABLE IF EXISTS reviews CASCADE;
   DROP TABLE IF EXISTS orders CASCADE;
   DROP TABLE IF EXISTS products CASCADE;
   DROP TABLE IF EXISTS brands CASCADE;
@@ -33,7 +34,6 @@ const createTablesQuery = `
   );
 
   -- 2. Категории
-  -- (Убрал icon_class, добавил discount_percent)
   CREATE TABLE IF NOT EXISTS categories (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -44,7 +44,7 @@ const createTablesQuery = `
     is_active BOOLEAN DEFAULT TRUE,
     sort_order INTEGER DEFAULT 0,
     meta_title VARCHAR(255),
-    discount_percent INTEGER DEFAULT 0 -- Новое поле (Скидка в %)
+    discount_percent INTEGER DEFAULT 0
   );
 
   -- 3. Бренды
@@ -92,6 +92,15 @@ const createTablesQuery = `
     tracking_number VARCHAR(100),
     user_comment TEXT,
     shipping_cost DECIMAL(10, 2) DEFAULT 0.00
+  );
+
+  -- 6. Отзывы (НОВОЕ, без created_at)
+  CREATE TABLE IF NOT EXISTS reviews (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+    rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT
   );
 `;
 

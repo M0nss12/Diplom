@@ -40,7 +40,7 @@
       </div>
     </div>
 
-    <!-- 3. ГОРЯЧИЕ ПРЕДЛОЖЕНИЯ (Выбор категории) -->
+    <!-- 3. ГОРЯЧИЕ ПРЕДЛОЖЕНИЯ -->
     <div v-if="discountedCategories.length > 0" class="section">
       <h2 class="section-title">🔥 Акции по категориям</h2>
       <div class="discount-categories">
@@ -60,7 +60,6 @@
     </div>
     
     <!-- 4. СПИСОК ТОВАРОВ -->
-    <!-- Секция отображается ТОЛЬКО если выбрана категория -->
     <div v-if="selectedCategoryId" class="section" id="catalog" ref="catalogSection">
       
       <h2 class="section-title">
@@ -70,18 +69,15 @@
         </button>
       </h2>
 
-      <!-- Загрузка -->
       <div v-if="loading" class="text-center p-8">
         <div class="loader"></div>
       </div>
 
-      <!-- Если в категории нет товаров -->
       <div v-else-if="products.length === 0" class="text-center p-8 card">
         <p>В этой категории товары закончились.</p>
         <button @click="resetFilter" class="btn btn-primary mt-4">Выбрать другую</button>
       </div>
 
-      <!-- Товары -->
       <div v-else class="products-grid animate-fade-in">
         <div v-for="product in products" :key="product.id" class="product-card">
           <div class="product-image">
@@ -103,10 +99,11 @@
               <span v-if="product.old_price" style="text-decoration: line-through; color: #999; font-size: 0.9rem; margin-right: 5px;">
                 {{ product.old_price }}
               </span>
-              {{ product.price.toLocaleString() }} ₽
+              {{ Number(product.price).toLocaleString() }} ₽
             </div>
             
-            <button class="add-to-cart" @click="addToCart(product)">
+            <!-- КНОПКА ДОБАВЛЕНИЯ -->
+            <button class="add-to-cart" @click.stop="handleAddToCart(product)">
               <span>🛒</span> В корзину
             </button>
           </div>
@@ -119,6 +116,7 @@
 
 <script>
 import { ref, onMounted, computed, onUnmounted } from 'vue'
+import { useCart } from '@/composables/useCart'; // 1. Импортируем useCart
 
 export default {
   name: 'HomeView',
@@ -128,18 +126,17 @@ export default {
     const categories = ref([])
     const loading = ref(false)
     const selectedCategoryId = ref(null)
-
-    // Лента новостей
-    const currentNewsIndex = ref(0)
     const newsItems = ref([
       { date: 'NEW', text: 'Поступление зимней резины Michelin и Nokian!' },
       { date: 'SALE', text: 'Скидка 20% на все моторные масла Mobil 1.' },
       { date: 'INFO', text: 'График работы в праздники: с 10:00 до 18:00.' },
       { date: 'AUTO', text: 'Бесплатная диагностика подвески при покупке от 5000р.' }
     ])
+    const currentNewsIndex = ref(0)
     let newsInterval = null
 
-    // --- ЛОГИКА ---
+    // 2. Получаем метод добавления из хука
+    const { addToCart } = useCart();
 
     const getCategoryName = (id) => {
       const cat = categories.value.find(c => c.id === id)
@@ -162,7 +159,9 @@ export default {
         const url = `/api/products?category_id=${catId}`
         const response = await fetch(url)
         if (response.ok) {
-          products.value = await response.json()
+          const rawProducts = await response.json()
+          // Если сервер использует пагинацию, данные могут быть в .data
+          products.value = Array.isArray(rawProducts) ? rawProducts : (rawProducts.data || [])
         }
       } catch (e) {
         console.error(e)
@@ -185,12 +184,21 @@ export default {
       products.value = []
     }
 
-    const addToCart = (product) => {
-      alert(`Товар "${product.name}" добавлен в корзину!`)
+    // 3. Обработчик добавления
+    const handleAddToCart = (product) => {
+      // Создаем копию объекта и приводим цену к числу, чтобы избежать ошибок
+      const itemToAdd = {
+        ...product,
+        price: Number(product.price) 
+      };
+      
+      addToCart(itemToAdd);
+      
+      // Можно заменить alert на красивое уведомление в будущем
+      alert(`Товар "${product.name}" добавлен в корзину!`);
     }
 
     onMounted(async () => {
-      // Запуск таймера новостей (5 сек)
       newsInterval = setInterval(() => {
         currentNewsIndex.value = (currentNewsIndex.value + 1) % newsItems.value.length
       }, 5000)
@@ -216,7 +224,8 @@ export default {
       storeInfo, products, categories, loading,
       selectedCategoryId, selectedCategoryName, discountedCategories,
       newsItems, currentNewsIndex,
-      getCategoryName, filterByCategory, resetFilter, addToCart
+      getCategoryName, filterByCategory, resetFilter, 
+      handleAddToCart // Возвращаем наш метод
     }
   }
 }

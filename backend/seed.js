@@ -39,7 +39,7 @@ const BRAND_NAMES = [
 
 const COUNTRIES = ['Germany', 'Japan', 'USA', 'Italy', 'France', 'South Korea', 'China', 'UK'];
 
-// Словарь для генерации названий товаров по категориям
+// Шаблоны названий товаров
 const PRODUCT_TEMPLATES = {
   'engine': ['Поршень', 'Коленвал', 'Прокладка ГБЦ', 'Клапан впускной', 'Подушка двигателя'],
   'brakes': ['Тормозные колодки', 'Тормозной диск', 'Суппорт', 'Тормозной шланг', 'Трос ручника'],
@@ -51,6 +51,26 @@ const PRODUCT_TEMPLATES = {
   'batteries': ['Аккумулятор 60Ah', 'Аккумулятор 75Ah', 'Аккумулятор 100Ah'],
   'wheels': ['Шина зимняя R16', 'Шина летняя R17', 'Диск литой R16', 'Болт колесный']
 };
+
+// Тексты отзывов (НОВОЕ)
+const REVIEWS_POSITIVE = [
+  'Отличная деталь, встала как родная!',
+  'Качество супер, рекомендую.',
+  'Быстрая доставка, упаковка целая.',
+  'Пользуюсь уже месяц, полет нормальный.',
+  'Цена/качество соответствует.'
+];
+const REVIEWS_NEUTRAL = [
+  'Нормально, но упаковка была помята.',
+  'Деталь подошла, но пришлось повозиться с установкой.',
+  'Среднее качество за эти деньги.',
+  'Доставка задержалась на 2 дня.'
+];
+const REVIEWS_NEGATIVE = [
+  'Не подошло, хотя по VIN билось.',
+  'Качество пластика ужасное.',
+  'Пришло со сколом, оформил возврат.'
+];
 
 // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 
@@ -66,11 +86,11 @@ async function seed() {
   try {
     console.log('🌱 Начинаем заполнение базы данных...');
 
-    // 1. Очистка таблиц (с сохранением пользователей)
+    // 1. Очистка таблиц (Добавили reviews в очистку)
     console.log('🧹 Очистка старых данных...');
-    await client.query('TRUNCATE TABLE orders, products, brands, categories RESTART IDENTITY CASCADE');
+    await client.query('TRUNCATE TABLE reviews, orders, products, brands, categories RESTART IDENTITY CASCADE');
 
-    // Получаем ID любого пользователя (админа), чтобы привязать заказы
+    // Получаем ID пользователя для привязки заказов и отзывов
     const userRes = await client.query('SELECT id FROM users LIMIT 1');
     if (userRes.rows.length === 0) {
       throw new Error('❌ В базе нет пользователей! Сначала запустите db-init.js');
@@ -91,7 +111,7 @@ async function seed() {
           cat.slug, 
           `Качественные товары в категории ${cat.name}`, 
           getRandomInt(0, 100),
-          getRandomInt(0, 1) === 1 ? getRandomInt(5, 20) : 0 // 50% шанс на скидку
+          getRandomInt(0, 1) === 1 ? getRandomInt(5, 20) : 0
         ]
       );
       categoryIds.push(res.rows[0].id);
@@ -103,8 +123,7 @@ async function seed() {
     const brandIds = [];
     for (let i = 0; i < 100; i++) {
       const baseName = getRandomElement(BRAND_NAMES);
-      // Чтобы набрать 100, добавляем иногда суффиксы, если имена повторяются
-      const name = i < BRAND_NAMES.length ? BRAND_NAMES[i] : `${baseName} ${['Pro', 'Auto', 'Tech', 'Parts', 'Systems'][getRandomInt(0,4)]}`;
+      const name = i < BRAND_NAMES.length ? BRAND_NAMES[i] : `${baseName} ${['Pro', 'Auto', 'Tech', 'Parts'][getRandomInt(0,3)]}`;
       
       const res = await client.query(
         `INSERT INTO brands (name, country, website_url, description, year_founded, is_popular, status) 
@@ -115,7 +134,7 @@ async function seed() {
           `https://www.${name.toLowerCase().replace(/\s/g, '')}.com`,
           `Ведущий производитель автозапчастей ${name}.`,
           getRandomInt(1900, 2020),
-          getRandomInt(0, 10) > 7, // 30% шанс что популярный
+          getRandomInt(0, 10) > 7,
           'active'
         ]
       );
@@ -127,17 +146,14 @@ async function seed() {
     const productIds = [];
     
     for (let i = 0; i < 100; i++) {
-      // Выбираем случайную категорию из тех, для которых у нас есть шаблоны имен
       const templateKeys = Object.keys(PRODUCT_TEMPLATES);
       let catSlug = getRandomElement(templateKeys);
-      // Если случайно выбрали категорию без шаблонов (из тех 20), берем 'accessories' как дефолт
       if (!PRODUCT_TEMPLATES[catSlug]) catSlug = 'engine'; 
       
       const catId = categoryMap[catSlug] || categoryIds[0];
       const prodNameBase = getRandomElement(PRODUCT_TEMPLATES[catSlug] || ['Автозапчасть']);
       const brandId = getRandomElement(brandIds);
       
-      // Генерируем цену
       const price = getRandomInt(500, 25000);
       const hasDiscount = getRandomInt(0, 10) > 7;
       
@@ -147,17 +163,17 @@ async function seed() {
           sku, category_id, brand_id, rating, is_featured, weight
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
         [
-          `${prodNameBase} ${getRandomElement(['Premium', 'Standard', 'Pro', 'X-Series'])}`, // Name
-          `Высококачественный товар для вашего автомобиля. Гарантия качества.`, // Desc
-          hasDiscount ? Math.floor(price * 0.8) : price, // Price
-          hasDiscount ? price : null, // Old Price
-          getRandomInt(0, 50), // Stock
-          `SKU-${getRandomInt(10000, 99999)}`, // SKU
+          `${prodNameBase} ${getRandomElement(['Premium', 'Standard', 'Pro', 'X-Series'])}`,
+          `Высококачественный товар для вашего автомобиля. Гарантия качества.`,
+          hasDiscount ? Math.floor(price * 0.8) : price,
+          hasDiscount ? price : null,
+          getRandomInt(0, 50),
+          `SKU-${getRandomInt(10000, 99999)}`,
           catId,
           brandId,
-          getRandomFloat(3.5, 5.0), // Rating
-          getRandomInt(0, 10) > 8, // Featured (20%)
-          getRandomFloat(0.5, 15.0) // Weight
+          getRandomFloat(3.5, 5.0),
+          getRandomInt(0, 10) > 8,
+          getRandomFloat(0.5, 15.0)
         ]
       );
       productIds.push(res.rows[0].id);
@@ -190,6 +206,30 @@ async function seed() {
           getRandomElement([0, 300, 500, 1000])
         ]
       );
+    }
+
+    // 6. Создание отзывов (НОВОЕ)
+    console.log('💬 Создание отзывов...');
+    for (const prodId of productIds) {
+      // 70% шанс, что у товара будут отзывы
+      if (Math.random() > 0.3) {
+        const reviewsCount = getRandomInt(1, 5); // От 1 до 5 отзывов на товар
+        
+        for (let j = 0; j < reviewsCount; j++) {
+          const rating = getRandomInt(1, 5);
+          let comment = '';
+          
+          if (rating >= 4) comment = getRandomElement(REVIEWS_POSITIVE);
+          else if (rating === 3) comment = getRandomElement(REVIEWS_NEUTRAL);
+          else comment = getRandomElement(REVIEWS_NEGATIVE);
+
+          await client.query(
+            `INSERT INTO reviews (user_id, product_id, rating, comment)
+             VALUES ($1, $2, $3, $4)`,
+            [userId, prodId, rating, comment]
+          );
+        }
+      }
     }
 
     console.log('✅ База данных успешно заполнена тестовыми данными!');

@@ -1,0 +1,246 @@
+<template>
+  <div class="container animate-fade-in" style="margin-top: 2rem; margin-bottom: 4rem;">
+    <h1>🛒 Оформление заказа</h1>
+
+    <div v-if="cartItems.length === 0" class="text-center p-8 card">
+      <div style="font-size: 3rem; margin-bottom: 1rem;">🛍️</div>
+      <p>Ваша корзина пуста.</p>
+      <button @click="$router.push('/')" class="btn btn-primary mt-4">Перейти в каталог</button>
+    </div>
+
+    <div v-else class="cart-layout">
+      
+      <!-- ЛЕВАЯ КОЛОНКА -->
+      <div class="cart-left-column">
+        <!-- Список -->
+        <div class="cart-items-list mb-6">
+          <div v-for="item in cartItems" :key="item.id" class="cart-item">
+            <div class="item-img-wrapper">
+              <img :src="item.image_url || 'https://via.placeholder.com/100'" alt="Товар">
+            </div>
+            <div class="item-info">
+              <h3>{{ item.name }}</h3>
+              <p class="price-single">{{ item.price.toLocaleString() }} ₽</p>
+            </div>
+            <div class="item-controls">
+              <button class="qty-btn" @click="updateQuantity(item.id, -1)">−</button>
+              <span class="qty-val">{{ item.quantity }}</span>
+              <button class="qty-btn" @click="updateQuantity(item.id, 1)">+</button>
+            </div>
+            <div class="item-total-price">
+              {{ (item.price * item.quantity).toLocaleString() }} ₽
+            </div>
+            <button class="remove-btn" @click="removeFromCart(item.id)">✕</button>
+          </div>
+        </div>
+
+        <!-- Данные получателя -->
+        <div class="card p-6" v-if="user">
+          <h2 class="mb-4">📋 Данные получателя</h2>
+          
+          <div class="form-group">
+            <label class="form-label">Способ получения</label>
+            <div class="delivery-options">
+              <label class="radio-label">
+                <input type="radio" value="pickup" v-model="form.deliveryType">
+                <span class="radio-custom"></span>
+                🏃 Самовывоз (Бесплатно)
+              </label>
+              <label class="radio-label">
+                <input type="radio" value="delivery" v-model="form.deliveryType">
+                <span class="radio-custom"></span>
+                🚚 Доставка курьером (500 ₽)
+              </label>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">Имя</label>
+              <input v-model="form.name" class="form-input" placeholder="Ваше имя">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Телефон</label>
+              <input v-model="form.phone" class="form-input" placeholder="+7 (999) 000-00-00">
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input v-model="form.email" type="email" class="form-input" placeholder="example@mail.ru">
+          </div>
+
+          <!-- Скрываем адрес если Самовывоз -->
+          <div v-if="form.deliveryType === 'delivery'" class="animate-fade-in">
+            <div class="form-group">
+              <label class="form-label">Адрес доставки</label>
+              <input v-model="form.address" class="form-input" placeholder="Город, улица, дом, квартира">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Комментарий курьеру</label>
+              <textarea v-model="form.comment" class="form-textarea" placeholder="Код домофона, этаж..."></textarea>
+            </div>
+          </div>
+
+          <!-- Чекбокс сохранения данных (Показываем, если есть изменения) -->
+          <div class="form-group checkbox-group mt-4" style="background: none; padding: 0;">
+            <input type="checkbox" id="saveDetails" v-model="saveDetails">
+            <label for="saveDetails" style="cursor: pointer; user-select: none;">
+              Сохранить мои данные (телефон и адрес) для будущих заказов
+            </label>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ПРАВАЯ КОЛОНКА -->
+      <div class="cart-summary card">
+        <h2>Итого</h2>
+        <div class="summary-line">
+          <span>Товары ({{ totalCount }})</span>
+          <span>{{ totalPrice.toLocaleString() }} ₽</span>
+        </div>
+        <div class="summary-line">
+          <span>Доставка</span>
+          <span v-if="form.deliveryType === 'pickup'" style="color: var(--secondary);">0 ₽</span>
+          <span v-else>{{ shippingCost }} ₽</span>
+        </div>
+        
+        <div class="divider"></div>
+        
+        <div class="summary-total">
+          <span>Всего:</span>
+          <span>{{ (totalPrice + shippingCost).toLocaleString() }} ₽</span>
+        </div>
+        
+        <div v-if="user" class="mt-4">
+          <button @click="createOrder" class="btn btn-primary w-100 pay-btn" :disabled="isLoading">
+             {{ isLoading ? 'Создание...' : '📝 Оформить заказ' }}
+          </button>
+          <div v-if="errorMsg" class="message error mt-2">{{ errorMsg }}</div>
+        </div>
+        
+        <div v-else class="text-center mt-4">
+          <p class="mb-2 text-sm" style="color: var(--danger);">Войдите, чтобы оформить заказ</p>
+          <router-link to="/login" class="btn btn-outline w-100">Войти</router-link>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import { useCart } from '@/composables/useCart';
+import { ref, onMounted, computed } from 'vue';
+import { useRouter } from 'vue-router';
+
+export default {
+  setup() {
+    const { cartItems, removeFromCart, updateQuantity, totalCount, totalPrice, clearCart } = useCart();
+    const user = ref(null);
+    const isLoading = ref(false);
+    const errorMsg = ref('');
+    const router = useRouter();
+    const saveDetails = ref(false); // Флаг сохранения
+    
+    const form = ref({
+      deliveryType: 'pickup',
+      name: '',
+      phone: '',
+      email: '',
+      address: '',
+      comment: ''
+    });
+
+    const shippingCost = computed(() => form.value.deliveryType === 'delivery' ? 500 : 0);
+
+    onMounted(async () => {
+      const u = localStorage.getItem('user');
+      const token = localStorage.getItem('token');
+      
+      if (u && token) {
+        // Берем базовые данные из localStorage
+        const localUserData = JSON.parse(u);
+        user.value = localUserData;
+        form.value.name = localUserData.username || '';
+        form.value.email = localUserData.email || '';
+
+        // Пытаемся подгрузить АКТУАЛЬНЫЕ данные (телефон, адрес) из БД
+        try {
+          const res = await fetch('/api/auth/me', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const freshData = await res.json();
+            form.value.phone = freshData.phone || '';
+            form.value.address = freshData.address || '';
+            // Если данные пришли пустыми, можно предложить сохранить их
+            if (!freshData.phone || !freshData.address) {
+                saveDetails.value = true;
+            }
+          }
+        } catch (e) {
+          console.error("Ошибка загрузки профиля", e);
+        }
+      }
+    });
+
+    const createOrder = async () => {
+      // Валидация
+      if (!form.value.name || !form.value.phone || !form.value.email) {
+        errorMsg.value = 'Заполните обязательные поля (Имя, Телефон, Email)';
+        return;
+      }
+      if (form.value.deliveryType === 'delivery' && !form.value.address) {
+        errorMsg.value = 'Укажите адрес доставки';
+        return;
+      }
+
+      isLoading.value = true;
+      errorMsg.value = '';
+      const token = localStorage.getItem('token');
+
+      try {
+        const res = await fetch('/api/orders/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ 
+            cartItems: cartItems.value,
+            orderDetails: { ...form.value },
+            saveDetails: saveDetails.value // Отправляем флаг
+          })
+        });
+
+        if (!res.ok) throw new Error('Ошибка создания');
+
+        // Успех
+        clearCart();
+        router.push('/my-orders');
+        
+      } catch (err) {
+        errorMsg.value = 'Ошибка при создании заказа';
+      } finally {
+        isLoading.value = false;
+      }
+    };
+
+    return { 
+      cartItems, removeFromCart, updateQuantity, totalCount, totalPrice, 
+      user, createOrder, form, shippingCost, isLoading, errorMsg, saveDetails
+    };
+  }
+}
+</script>
+
+<style scoped>
+.delivery-options { display: flex; flex-direction: column; gap: 0.5rem; background: var(--gray-100); padding: 1rem; border-radius: var(--radius); }
+.radio-label { display: flex; align-items: center; cursor: pointer; }
+.radio-label input { display: none; }
+.radio-custom { width: 20px; height: 20px; border: 2px solid var(--gray); border-radius: 50%; margin-right: 10px; position: relative; display: flex; align-items: center; justify-content: center; }
+.radio-label input:checked + .radio-custom { border-color: var(--primary); }
+.radio-label input:checked + .radio-custom::after { content: ''; width: 10px; height: 10px; background: var(--primary); border-radius: 50%; }
+.cart-left-column { display: flex; flex-direction: column; gap: 2rem; }
+</style>
