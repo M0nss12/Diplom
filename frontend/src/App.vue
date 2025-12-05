@@ -33,8 +33,6 @@
               <li><router-link to="/about">О нас</router-link></li>
               <li><router-link to="/contacts">Контакты</router-link></li>
               <li><a href="#">Каталог</a></li>
-              <li><a href="#">Доставка</a></li>
-              <li><a href="#">Оплата</a></li>
             </ul>
           </div>
 

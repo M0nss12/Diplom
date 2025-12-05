@@ -4,7 +4,12 @@
       <h2>Заказы</h2>
       <button v-if="isAdmin" class="btn btn-primary" @click="openEditModal()">+ Создать</button>
     </div>
-    <table class="admin-table">
+    
+    <p v-if="paginatedItems.length === 0" class="no-results-message text-center p-4">
+        {{ isAdmin ? 'Нет заказов в системе' : 'Нет ваших заказов' }}
+    </p>
+
+    <table v-else class="admin-table">
       <thead>
         <tr>
           <th>ID</th>
@@ -12,7 +17,6 @@
           <th>Сумма</th>
           <th>Статус</th>
           
-          <!-- Поля Админа -->
           <template v-if="isAdmin">
             <th>Оплата</th>
             <th>Доставка (цена)</th>
@@ -26,9 +30,18 @@
       <tbody>
         <tr v-for="o in paginatedItems" :key="o.id">
           <td>{{ o.id }}</td>
-          <td>{{ o.recipient_name }} ({{ o.user_id }})</td>
+          <td>{{ o.recipient_name || '—' }} (ID: {{ o.user_id }})</td>
           <td>{{ o.total_amount }} ₽</td>
-          <td><span class="status-badge" :class="o.status">{{ o.status }}</span></td>
+          <td>
+            <span class="status-badge" 
+                  :class="{ 
+                      'status-pending': o.status === 'pending',
+                      'status-paid': o.status === 'paid' || o.status === 'shipped' || o.status === 'delivered',
+                      'status-cancelled': o.status === 'cancelled',
+                  }">
+                  {{ o.status }}
+            </span>
+          </td>
 
           <template v-if="isAdmin">
             <td>{{ o.payment_method }}</td>
@@ -54,10 +67,9 @@
       <button class="btn btn-outline" :disabled="page === totalPages" @click="nextPage">Вперед</button>
     </div>
 
-    <!-- МОДАЛКА (ПОЛНАЯ) -->
     <Teleport to="body">
       <div v-if="showEditModal" class="modal-overlay" @click.self="closeModals">
-        <div class="modal-content card">
+        <div class="modal-content card large-modal">
           <h3>{{ isEdit ? 'Редактировать заказ' : 'Создать заказ' }}</h3>
           <form @submit.prevent="saveItem">
             <div class="grid-2">
@@ -93,10 +105,20 @@
 </template>
 
 <script>
+import { onMounted } from 'vue'; // <--- Импортируем onMounted
 import { useCrud } from '@/composables/useCrud';
-export default { setup() { return useCrud('orders'); } }
-</script>
 
-<style scoped>
-.pagination { display: flex; justify-content: center; gap: 15px; padding-top: 10px; }
-</style>
+export default { 
+    name: 'CatalogOrderList',
+    setup() { 
+        const crud = useCrud('orders');
+        
+        // --- Добавляем вызов fetchItems при монтировании ---
+        onMounted(() => {
+            crud.fetchItems(); 
+        });
+
+        return { ...crud }; 
+    } 
+}
+</script>

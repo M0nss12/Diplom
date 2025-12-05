@@ -9,7 +9,6 @@
         <tr><th>ID</th><th>Имя</th><th>Email</th><th>Роль</th><th>Действия</th></tr>
       </thead>
       <tbody>
-        <!-- Проверка на наличие данных -->
         <tr v-if="paginatedItems.length === 0">
           <td colspan="5" class="text-center p-4">Нет данных или недостаточно прав</td>
         </tr>
@@ -30,7 +29,6 @@
       </tbody>
     </table>
 
-    <!-- ПАГИНАЦИЯ -->
     <div class="pagination mt-4" v-if="totalPages > 1">
       <button class="btn btn-outline" :disabled="page === 1" @click="prevPage">Назад</button>
       <span>Стр. {{ page }} из {{ totalPages }}</span>
@@ -67,6 +65,31 @@
 </template>
 
 <script>
+import { onMounted } from 'vue'; 
 import { useCrud } from '@/composables/useCrud';
-export default { setup() { return useCrud('users'); } }
+
+export default { 
+    name: 'CatalogUserList',
+    setup() { 
+        // Начальная форма для пользователей
+        const initialForm = {
+            username: '',
+            email: '',
+            password: '', 
+            role: 'client',
+            phone: '',
+            address: ''
+        };
+        
+        // Передаем endpoint и initialForm
+        const crud = useCrud('users', initialForm); 
+        
+        onMounted(() => {
+            crud.fetchItems(); 
+        });
+
+        // Возврат всех функций и состояний из useCrud
+        return { ...crud }; 
+    } 
+}
 </script>
